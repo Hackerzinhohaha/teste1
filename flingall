@@ -1,0 +1,157 @@
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "Script Executado";
+    Text = "Fling All Infinito com Prioridade";
+    Duration = 6;
+})
+
+local Players = game:GetService("Players")
+local Player = Players.LocalPlayer
+
+-- Priorize por nome ou time
+local PrioritizePlayerName = nil -- exemplo: "NoobMaster69"
+local PrioritizeTeamName = nil -- exemplo: "RedTeam"
+
+getgenv().FPDH = workspace.FallenPartsDestroyHeight
+getgenv().Welcome = true
+
+local Message = function(_Title, _Text, Time)
+    game:GetService("StarterGui"):SetCore("SendNotification", {Title = _Title, Text = _Text, Duration = Time})
+end
+
+local GetTargets = function()
+    local targets = {}
+
+    -- Adiciona jogadores de time prioritário primeiro
+    if PrioritizeTeamName then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= Player and p.Team and p.Team.Name == PrioritizeTeamName then
+                table.insert(targets, p)
+            end
+        end
+    end
+
+    -- Adiciona jogador com nome exato prioritário
+    if PrioritizePlayerName then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= Player and string.lower(p.Name) == string.lower(PrioritizePlayerName) and not table.find(targets, p) then
+                table.insert(targets, p)
+            end
+        end
+    end
+
+    -- Adiciona todos os outros jogadores
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= Player and p.UserId ~= 2924145477 and not table.find(targets, p) then
+            table.insert(targets, p)
+        end
+    end
+
+    return targets
+end
+
+local SkidFling = function(TargetPlayer)
+    local Character = Player.Character
+    local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+    local RootPart = Humanoid and Humanoid.RootPart
+    local TCharacter = TargetPlayer.Character
+    local THumanoid, TRootPart, THead, Accessory, Handle
+
+    if not (Character and Humanoid and RootPart and TCharacter) then return end
+
+    THumanoid = TCharacter:FindFirstChildOfClass("Humanoid")
+    TRootPart = THumanoid and THumanoid.RootPart
+    THead = TCharacter:FindFirstChild("Head")
+    Accessory = TCharacter:FindFirstChildOfClass("Accessory")
+    Handle = Accessory and Accessory:FindFirstChild("Handle")
+
+    if RootPart.Velocity.Magnitude < 50 then
+        getgenv().OldPos = RootPart.CFrame
+    end
+
+    if THumanoid and THumanoid.Sit then return end
+    if THead then
+        workspace.CurrentCamera.CameraSubject = THead
+    elseif Handle then
+        workspace.CurrentCamera.CameraSubject = Handle
+    elseif THumanoid and TRootPart then
+        workspace.CurrentCamera.CameraSubject = THumanoid
+    end
+
+    local FPos = function(BasePart, Pos, Ang)
+        RootPart.CFrame = CFrame.new(BasePart.Position) * Pos * Ang
+        Character:SetPrimaryPartCFrame(CFrame.new(BasePart.Position) * Pos * Ang)
+        RootPart.Velocity = Vector3.new(9e7, 9e7 * 10, 9e7)
+        RootPart.RotVelocity = Vector3.new(9e8, 9e8, 9e8)
+    end
+
+    local SFBasePart = function(BasePart)
+        local TimeToWait = 1.2
+        local Time = tick()
+        local Angle = 0
+
+        repeat
+            if RootPart and THumanoid then
+                Angle += 100
+                FPos(BasePart, CFrame.new(0, 1.5, 0), CFrame.Angles(math.rad(Angle), 0, 0))
+                FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(math.rad(Angle), 0, 0))
+                FPos(BasePart, CFrame.new(2.25, 1.5, -2.25), CFrame.Angles(math.rad(Angle), 0, 0))
+                FPos(BasePart, CFrame.new(-2.25, -1.5, 2.25), CFrame.Angles(math.rad(Angle), 0, 0))
+            else
+                break
+            end
+        until BasePart.Velocity.Magnitude > 500 or tick() > Time + TimeToWait
+    end
+
+    workspace.FallenPartsDestroyHeight = 0/0
+
+    local BV = Instance.new("BodyVelocity")
+    BV.Name = "EpixVel"
+    BV.Parent = RootPart
+    BV.Velocity = Vector3.new(9e8, 9e8, 9e8)
+    BV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+
+    Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+
+    if TRootPart and THead and (TRootPart.Position - THead.Position).Magnitude > 5 then
+        SFBasePart(THead)
+    elseif TRootPart then
+        SFBasePart(TRootPart)
+    elseif THead then
+        SFBasePart(THead)
+    elseif Handle then
+        SFBasePart(Handle)
+    else
+        Message("Erro", "Target inválido", 5)
+    end
+
+    BV:Destroy()
+    Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+    workspace.CurrentCamera.CameraSubject = Humanoid
+
+    repeat
+        RootPart.CFrame = getgenv().OldPos * CFrame.new(0, .5, 0)
+        Character:SetPrimaryPartCFrame(getgenv().OldPos * CFrame.new(0, .5, 0))
+        Humanoid:ChangeState("GettingUp")
+        for _, x in ipairs(Character:GetChildren()) do
+            if x:IsA("BasePart") then
+                x.Velocity = Vector3.zero
+                x.RotVelocity = Vector3.zero
+            end
+        end
+        task.wait()
+    until (RootPart.Position - getgenv().OldPos.Position).Magnitude < 25
+
+    workspace.FallenPartsDestroyHeight = getgenv().FPDH
+end
+
+-- 🔁 Loop Infinito sem Pausa
+task.spawn(function()
+    while true do
+        local targets = GetTargets()
+        for _, target in ipairs(targets) do
+            pcall(function()
+                SkidFling(target)
+            end)
+        end
+    end
+end)
