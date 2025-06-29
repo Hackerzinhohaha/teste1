@@ -1,51 +1,120 @@
-game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "Script Executado";
-    Text = "Fling All Infinito (Sem Pausas)";
-    Duration = 6;
-})
-
+-- Variáveis básicas e serviços
 local Players = game:GetService("Players")
 local Player = Players.LocalPlayer
+local StarterGui = game:GetService("StarterGui")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
 
+-- Variáveis globais para o fling
+getgenv().Welcome = getgenv().Welcome or false
+getgenv().OldPos = nil
 getgenv().FPDH = workspace.FallenPartsDestroyHeight
-getgenv().Welcome = true
 
-local Message = function(_Title, _Text, Time)
-    game:GetService("StarterGui"):SetCore("SendNotification", {Title = _Title, Text = _Text, Duration = Time})
+-- Notificação helper
+local function Notify(title, text, duration)
+    StarterGui:SetCore("SendNotification", {Title = title, Text = text, Duration = duration or 5})
 end
 
-local SkidFling = function(TargetPlayer)
+-- Função para pegar player baseado em nome parcial ou "all", "random", etc.
+local function GetPlayerByName(name)
+    local lowerName = name and name:lower() or ""
+    if lowerName == "all" or lowerName == "others" then
+        return "all"
+    elseif lowerName == "random" then
+        local plist = Players:GetPlayers()
+        for i, p in ipairs(plist) do
+            if p == Player then table.remove(plist, i) break end
+        end
+        return plist
+    else
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= Player then
+                if plr.Name:lower():find(lowerName, 1, true) or plr.DisplayName:lower():find(lowerName, 1, true) then
+                    return plr
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- Função principal do fling (adaptada do seu código)
+local function SkidFling(TargetPlayer)
     local Character = Player.Character
-    local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+    if not Character then return end
+    local Humanoid = Character:FindFirstChildOfClass("Humanoid")
     local RootPart = Humanoid and Humanoid.RootPart
-    local TCharacter = TargetPlayer.Character
-    if not TCharacter or not Character or not Humanoid or not RootPart then return end
+    if not (Humanoid and RootPart) then return end
 
-    local TRootPart = TCharacter:FindFirstChild("HumanoidRootPart") or TCharacter:FindFirstChildWhichIsA("BasePart")
-    if not TRootPart then return end
+    local TCharacter = TargetPlayer and TargetPlayer.Character
+    if not TCharacter then return end
 
+    local THumanoid = TCharacter:FindFirstChildOfClass("Humanoid")
+    local TRootPart = THumanoid and THumanoid.RootPart
+    local THead = TCharacter:FindFirstChild("Head")
+    local Accessory = TCharacter:FindFirstChildOfClass("Accessory")
+    local Handle = Accessory and Accessory:FindFirstChild("Handle")
+
+    -- Salva posição antiga
     if RootPart.Velocity.Magnitude < 50 then
         getgenv().OldPos = RootPart.CFrame
     end
 
-    local FPos = function(BasePart, Pos, Ang)
-        RootPart.CFrame = CFrame.new(BasePart.Position) * Pos * Ang
-        Character:SetPrimaryPartCFrame(CFrame.new(BasePart.Position) * Pos * Ang)
+    if THumanoid and THumanoid.Sit then
+        return
+    end
+
+    -- Configura câmera para a cabeça ou parte relevante do alvo
+    if THead then
+        workspace.CurrentCamera.CameraSubject = THead
+    elseif Handle then
+        workspace.CurrentCamera.CameraSubject = Handle
+    elseif TRootPart then
+        workspace.CurrentCamera.CameraSubject = THumanoid
+    end
+
+    local function MoveRootPart(basepart, offset, ang)
+        RootPart.CFrame = CFrame.new(basepart.Position) * offset * ang
+        Character:SetPrimaryPartCFrame(CFrame.new(basepart.Position) * offset * ang)
         RootPart.Velocity = Vector3.new(9e7, 9e7 * 10, 9e7)
         RootPart.RotVelocity = Vector3.new(9e8, 9e8, 9e8)
     end
 
-    local SFBasePart = function(BasePart)
-        local TimeToWait = 0.6
-        local Start = tick()
-        local Angle = 0
+    local function SFBasePart(basepart)
+        local TimeToWait = 2
+        local startTime = tick()
+        local angle = 0
 
         repeat
-            Angle += 100
-            FPos(BasePart, CFrame.new(0, 1.5, 0), CFrame.Angles(math.rad(Angle), 0, 0))
-            task.wait()
-            FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(math.rad(Angle), 0, 0))
-        until tick() > Start + TimeToWait or not TargetPlayer.Character or Humanoid.Health <= 0
+            if RootPart and THumanoid then
+                if basepart.Velocity.Magnitude < 50 then
+                    angle = angle + 100
+                    MoveRootPart(basepart, CFrame.new(0, 1.5, 0) + THumanoid.MoveDirection * basepart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(angle), 0, 0))
+                    task.wait()
+                    MoveRootPart(basepart, CFrame.new(0, -1.5, 0) + THumanoid.MoveDirection * basepart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(angle), 0, 0))
+                    task.wait()
+                    MoveRootPart(basepart, CFrame.new(2.25, 1.5, -2.25) + THumanoid.MoveDirection * basepart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(angle), 0, 0))
+                    task.wait()
+                    MoveRootPart(basepart, CFrame.new(-2.25, -1.5, 2.25) + THumanoid.MoveDirection * basepart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(angle), 0, 0))
+                    task.wait()
+                else
+                    -- Movimentos alternativos para velocidade maior
+                    MoveRootPart(basepart, CFrame.new(0, 1.5, THumanoid.WalkSpeed), CFrame.Angles(math.rad(90), 0, 0))
+                    task.wait()
+                    MoveRootPart(basepart, CFrame.new(0, -1.5, -THumanoid.WalkSpeed), CFrame.Angles(0, 0, 0))
+                    task.wait()
+                end
+            else
+                break
+            end
+        until
+            basepart.Velocity.Magnitude > 500
+            or basepart.Parent ~= TargetPlayer.Character
+            or TargetPlayer.Parent ~= Players
+            or not TargetPlayer.Character == TCharacter
+            or (THumanoid and THumanoid.Sit)
+            or (Humanoid and Humanoid.Health <= 0)
+            or tick() > startTime + TimeToWait
     end
 
     workspace.FallenPartsDestroyHeight = 0/0
@@ -54,38 +123,342 @@ local SkidFling = function(TargetPlayer)
     BV.Name = "EpixVel"
     BV.Parent = RootPart
     BV.Velocity = Vector3.new(9e8, 9e8, 9e8)
-    BV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    BV.MaxForce = Vector3.new(1/0, 1/0, 1/0)
 
     Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
 
-    SFBasePart(TRootPart)
+    if TRootPart and THead then
+        if (TRootPart.CFrame.p - THead.CFrame.p).Magnitude > 5 then
+            SFBasePart(THead)
+        else
+            SFBasePart(TRootPart)
+        end
+    elseif TRootPart then
+        SFBasePart(TRootPart)
+    elseif THead then
+        SFBasePart(THead)
+    elseif Handle then
+        SFBasePart(Handle)
+    else
+        return
+    end
 
     BV:Destroy()
     Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
     workspace.CurrentCamera.CameraSubject = Humanoid
 
-    RootPart.CFrame = getgenv().OldPos * CFrame.new(0, .5, 0)
-    Character:SetPrimaryPartCFrame(getgenv().OldPos * CFrame.new(0, .5, 0))
-    Humanoid:ChangeState("GettingUp")
-    for _, x in ipairs(Character:GetChildren()) do
-        if x:IsA("BasePart") then
-            x.Velocity = Vector3.zero
-            x.RotVelocity = Vector3.zero
+    -- Volta para posição original
+    repeat
+        RootPart.CFrame = getgenv().OldPos * CFrame.new(0, .5, 0)
+        Character:SetPrimaryPartCFrame(getgenv().OldPos * CFrame.new(0, .5, 0))
+        Humanoid:ChangeState("GettingUp")
+        for _, part in pairs(Character:GetChildren()) do
+            if part:IsA("BasePart") then
+                part.Velocity = Vector3.new()
+                part.RotVelocity = Vector3.new()
+            end
         end
-    end
+        task.wait()
+    until (RootPart.Position - getgenv().OldPos.p).Magnitude < 25
 
     workspace.FallenPartsDestroyHeight = getgenv().FPDH
 end
 
--- LOOP INFINITO E AGRESSIVO (sem pausas)
-task.spawn(function()
-    while true do
-        for _, target in pairs(Players:GetPlayers()) do
-            if target ~= Player and target.UserId ~= 2924145477 then
-                pcall(function()
-                    SkidFling(target)
-                end)
-            end
+-- Criar GUI mínima para abrir o hub
+local function CreateMiniHub()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "MiniHubGui"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = CoreGui
+
+    local openBtn = Instance.new("TextButton")
+    openBtn.Size = UDim2.new(0, 160, 0, 50)
+    openBtn.Position = UDim2.new(0, 20, 0.5, -25)
+    openBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    openBtn.TextColor3 = Color3.new(1,1,1)
+    openBtn.Font = Enum.Font.GothamBold
+    openBtn.TextSize = 20
+    openBtn.Text = "Abrir Mozart Hub"
+    openBtn.Parent = screenGui
+
+    local uiCornerBtn = Instance.new("UICorner")
+    uiCornerBtn.CornerRadius = UDim.new(0, 8)
+    uiCornerBtn.Parent = openBtn
+
+    local uiStrokeBtn = Instance.new("UIStroke")
+    uiStrokeBtn.Color = Color3.fromRGB(0, 120, 255)
+    uiStrokeBtn.Thickness = 2
+    uiStrokeBtn.Parent = openBtn
+
+    openBtn.MouseButton1Click:Connect(function()
+        screenGui:Destroy()
+        CreateMainGui()
+    end)
+end
+
+-- Criar GUI principal
+function CreateMainGui()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "FlingHubGui"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = CoreGui
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 380, 0, 300)
+    frame.Position = UDim2.new(0, 20, 0.5, -150)
+    frame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    frame.BorderSizePixel = 0
+    frame.Parent = screenGui
+
+    local uiCornerFrame = Instance.new("UICorner")
+    uiCornerFrame.CornerRadius = UDim.new(0, 12)
+    uiCornerFrame.Parent = frame
+
+    local uiStrokeFrame = Instance.new("UIStroke")
+    uiStrokeFrame.Color = Color3.fromRGB(0, 120, 255)
+    uiStrokeFrame.Thickness = 2
+    uiStrokeFrame.Parent = frame
+
+    -- Título
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Text = "Mozart Hub"
+    titleLabel.Size = UDim2.new(1, 0, 0, 40)
+    titleLabel.Position = UDim2.new(0, 0, 0, 0)
+    titleLabel.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+    titleLabel.TextColor3 = Color3.new(1,1,1)
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextSize = 24
+    titleLabel.Parent = frame
+
+    -- Créditos
+    local creditsLabel = Instance.new("TextLabel")
+    creditsLabel.Text = "CRIADO POR MZ SCRIPTS"
+    creditsLabel.Size = UDim2.new(1, 0, 0, 20)
+    creditsLabel.Position = UDim2.new(0, 0, 0, 40)
+    creditsLabel.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    creditsLabel.TextColor3 = Color3.new(0.8, 0.8, 0.8)
+    creditsLabel.Font = Enum.Font.GothamBold
+    creditsLabel.TextSize = 14
+    creditsLabel.TextScaled = false
+    creditsLabel.BackgroundTransparency = 0
+    creditsLabel.Parent = frame
+
+    -- Fechar botão
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 100, 0, 35)
+    closeBtn.Position = UDim2.new(1, -110, 0, 5)
+    closeBtn.Text = "Fechar Hub"
+    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 30, 30)
+    closeBtn.TextColor3 = Color3.new(1, 1, 1)
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 16
+    closeBtn.Parent = titleLabel
+
+    local uiCornerClose = Instance.new("UICorner")
+    uiCornerClose.CornerRadius = UDim.new(0, 8)
+    uiCornerClose.Parent = closeBtn
+
+    closeBtn.MouseButton1Click:Connect(function()
+        screenGui:Destroy()
+        CreateMiniHub()
+    end)
+
+    -- Label e textbox time parcial
+    local timeLabel = Instance.new("TextLabel")
+    timeLabel.Text = "Filtrar por Time (ex: Red, Blue):"
+    timeLabel.Size = UDim2.new(1, -40, 0, 25)
+    timeLabel.Position = UDim2.new(0, 20, 0, 75)
+    timeLabel.TextColor3 = Color3.new(1,1,1)
+    timeLabel.BackgroundTransparency = 1
+    timeLabel.Font = Enum.Font.GothamBold
+    timeLabel.TextSize = 16
+    timeLabel.TextXAlignment = Enum.TextXAlignment.Left
+    timeLabel.Parent = frame
+
+    local timeTextBox = Instance.new("TextBox")
+    timeTextBox.PlaceholderText = "Deixe vazio para todos os times"
+    timeTextBox.Size = UDim2.new(1, -40, 0, 35)
+    timeTextBox.Position = UDim2.new(0, 20, 0, 105)
+    timeTextBox.ClearTextOnFocus = false
+    timeTextBox.Text = ""
+    timeTextBox.Font = Enum.Font.GothamBold
+    timeTextBox.TextSize = 16
+    timeTextBox.TextColor3 = Color3.new(1,1,1)
+    timeTextBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    timeTextBox.BorderSizePixel = 0
+    timeTextBox.Parent = frame
+
+    local uiCornerTimeTb = Instance.new("UICorner")
+    uiCornerTimeTb.CornerRadius = UDim.new(0, 6)
+    uiCornerTimeTb.Parent = timeTextBox
+
+    -- Label e textbox jogador parcial
+    local playerLabel = Instance.new("TextLabel")
+    playerLabel.Text = "Filtrar por Jogador (ex: ari, leo):"
+    playerLabel.Size = UDim2.new(1, -40, 0, 25)
+    playerLabel.Position = UDim2.new(0, 20, 0, 150)
+    playerLabel.TextColor3 = Color3.new(1,1,1)
+    playerLabel.BackgroundTransparency = 1
+    playerLabel.Font = Enum.Font.GothamBold
+    playerLabel.TextSize = 16
+    playerLabel.TextXAlignment = Enum.TextXAlignment.Left
+    playerLabel.Parent = frame
+
+    local playerTextBox = Instance.new("TextBox")
+    playerTextBox.PlaceholderText = "Deixe vazio para todos os jogadores"
+    playerTextBox.Size = UDim2.new(1, -40, 0, 35)
+    playerTextBox.Position = UDim2.new(0, 20, 0, 180)
+    playerTextBox.ClearTextOnFocus = false
+    playerTextBox.Text = ""
+    playerTextBox.Font = Enum.Font.GothamBold
+    playerTextBox.TextSize = 16
+    playerTextBox.TextColor3 = Color3.new(1,1,1)
+    playerTextBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    playerTextBox.BorderSizePixel = 0
+    playerTextBox.Parent = frame
+
+    local uiCornerPlayerTb = Instance.new("UICorner")
+    uiCornerPlayerTb.CornerRadius = UDim.new(0, 6)
+    uiCornerPlayerTb.Parent = playerTextBox
+
+    -- Botão FLING ALL ON
+    local flingOnBtn = Instance.new("TextButton")
+    flingOnBtn.Size = UDim2.new(0, 160, 0, 45)
+    flingOnBtn.Position = UDim2.new(0, 20, 1, -60)
+    flingOnBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
+    flingOnBtn.TextColor3 = Color3.new(1,1,1)
+    flingOnBtn.Text = "FLING ON"
+    flingOnBtn.Font = Enum.Font.GothamBold
+    flingOnBtn.TextSize = 20
+    flingOnBtn.Parent = frame
+
+    local uiCornerFlingOn = Instance.new("UICorner")
+    uiCornerFlingOn.CornerRadius = UDim.new(0, 8)
+    uiCornerFlingOn.Parent = flingOnBtn
+
+    local uiStrokeFlingOn = Instance.new("UIStroke")
+    uiStrokeFlingOn.Color = Color3.fromRGB(0, 100, 0)
+    uiStrokeFlingOn.Thickness = 2
+    uiStrokeFlingOn.Parent = flingOnBtn
+
+    -- Botão FLING ALL OFF
+    local flingOffBtn = Instance.new("TextButton")
+    flingOffBtn.Size = UDim2.new(0, 160, 0, 45)
+    flingOffBtn.Position = UDim2.new(0, 200, 1, -60)
+    flingOffBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+    flingOffBtn.TextColor3 = Color3.new(1,1,1)
+    flingOffBtn.Text = "FLING OFF"
+    flingOffBtn.Font = Enum.Font.GothamBold
+    flingOffBtn.TextSize = 20
+    flingOffBtn.Parent = frame
+
+    local uiCornerFlingOff = Instance.new("UICorner")
+    uiCornerFlingOff.CornerRadius = UDim.new(0, 8)
+    uiCornerFlingOff.Parent = flingOffBtn
+
+    local uiStrokeFlingOff = Instance.new("UIStroke")
+    uiStrokeFlingOff.Color = Color3.fromRGB(100, 0, 0)
+    uiStrokeFlingOff.Thickness = 2
+    uiStrokeFlingOff.Parent = flingOffBtn
+
+    local flingActive = false
+    local flingCoroutine = nil
+
+    flingOnBtn.MouseButton1Click:Connect(function()
+        if flingActive then
+            Notify("Mozart Hub", "Fling já está ativo!", 3)
+            return
         end
-    end
-end)
+        flingActive = true
+        Notify("Mozart Hub", "Iniciando Fling Contínuo...", 5)
+
+        flingCoroutine = coroutine.create(function()
+            while flingActive do
+                local teamFilter = timeTextBox.Text:lower()
+                local playerFilter = playerTextBox.Text:lower()
+
+                local targets = {}
+                local playerList = Players:GetPlayers()
+                for _, plr in ipairs(playerList) do
+                    if plr ~= Player then
+                        local teamMatch = (teamFilter == "" or (plr.Team and plr.Team.Name:lower():find(teamFilter)))
+                        local playerMatch = (playerFilter == "" or plr.Name:lower():find(playerFilter) or plr.DisplayName:lower():find(playerFilter))
+
+                        if teamMatch and playerMatch then
+                            table.insert(targets, plr)
+                        end
+                    end
+                end
+
+                if #targets == 0 then
+                    Notify("Mozart Hub", "Nenhum jogador encontrado com os filtros, tentando novamente...", 3)
+                    task.wait(2)
+                    continue
+                end
+
+                for _, plr in ipairs(targets) do
+                    if not flingActive then break end
+                    SkidFling(plr)
+                    -- Pausa de 0.5s removida aqui para fling mais rápido
+                end
+
+                if flingActive then
+                    Notify("Mozart Hub", "Ciclo de Fling concluído. Reiniciando...", 2)
+                    task.wait(1) -- Pequena pausa entre ciclos para evitar loop de 100% CPU
+                end
+            end
+            Notify("Mozart Hub", "Fling finalizado", 4)
+        end)
+        coroutine.resume(flingCoroutine)
+    end)
+
+    flingOffBtn.MouseButton1Click:Connect(function()
+        if flingActive then
+            flingActive = false
+            Notify("Mozart Hub", "Fling interrompido", 4)
+        else
+            Notify("Mozart Hub", "Fling não está ativo", 3)
+        end
+    end)
+
+    -- Mover script: Permite mover a GUI com o mouse
+    local dragging
+    local dragInput
+    local dragStart
+    local startPos
+
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    frame.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            dragInput = input
+        end
+    end)
+
+    RunService.Heartbeat:Connect(function()
+        if dragging and dragInput then
+            local delta = dragInput.Position - dragStart
+            frame.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+end
+
+-- Iniciar script mostrando o mini hub
+Notify("Mozart Hub", "Script carregado com sucesso!", 5)
+CreateMiniHub()
